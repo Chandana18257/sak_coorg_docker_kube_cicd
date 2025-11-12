@@ -3,7 +3,7 @@
 # Script: generate-kubeconfig.sh
 # Purpose: Generate kubeconfig file for Jenkins automation
 # Designed and Developed by: sak_shetty
-# Execute this file in Kube Controll Plane
+# Execute this script on the Kubernetes Control Plane node
 ################################################################################
 
 # ---------------------------- Colors for Logging ------------------------------
@@ -18,39 +18,46 @@ log_success() { echo -e "${GREEN}[SUCCESS] $(date '+%Y-%m-%d %H:%M:%S') - $*${NC
 log_error()   { echo -e "${RED}[ERROR] $(date '+%Y-%m-%d %H:%M:%S') - $*${NC}"; }
 
 # ---------------------------- Variables --------------------------------------
-OUTPUT_DIR="$HOME/kubeconfig_for_jenkins"
+OUTPUT_DIR="/home/ubuntu/kubeconfig_for_jenkins"
 KUBECONFIG_FILE="$OUTPUT_DIR/kubeconfig.yaml"
+SRC_FILE="/etc/kubernetes/admin.conf"
 
 # ---------------------------- Main Script ------------------------------------
 log_info "Creating output directory: $OUTPUT_DIR"
-mkdir -p "$OUTPUT_DIR"
+sudo mkdir -p "$OUTPUT_DIR"
 
-log_info "Copying /etc/kubernetes/admin.conf to $KUBECONFIG_FILE ..."
-if sudo cp /etc/kubernetes/admin.conf "$KUBECONFIG_FILE"; then
-    sudo chown $(whoami):$(whoami) "$KUBECONFIG_FILE"
+log_info "Copying kubeconfig from $SRC_FILE to $KUBECONFIG_FILE..."
+if sudo cp "$SRC_FILE" "$KUBECONFIG_FILE"; then
+    sudo chown ubuntu:ubuntu "$KUBECONFIG_FILE"
+    sudo chmod 600 "$KUBECONFIG_FILE"
     log_success "Kubeconfig successfully saved at: $KUBECONFIG_FILE"
 else
     log_error "Failed to copy kubeconfig!"
     exit 1
 fi
 
-log_info "Verifying Kubernetes cluster nodes..."
-kubectl --kubeconfig="$KUBECONFIG_FILE" get nodes
-
-log_info "Displaying Kubernetes cluster info:"
-kubectl --kubeconfig="$KUBECONFIG_FILE" version --short
+# Verify cluster connection
+log_info "Verifying Kubernetes cluster connection..."
+sudo -u ubuntu kubectl --kubeconfig="$KUBECONFIG_FILE" get nodes || {
+    log_error "Unable to verify cluster connection. Please check kubeadm setup."
+    exit 1
+}
 
 # ---------------------------- Footer Instructions -----------------------------
-log_success "Kubeconfig generation completed. Ready for Jenkins."
-echo "================================================"
-echo "After this, you will have a file: in this path"
-echo "/home/ubuntu/kubeconfig_for_jenkins/kubeconfig.yaml"
-echo "================================================="
+log_success "Kubeconfig generation completed successfully."
+echo "========================================================="
+echo "File created at: $KUBECONFIG_FILE"
+echo "========================================================="
 echo "On Jenkins Server: Before executing this file fetch-and-prepare-kubeconfig.sh"
 echo "Edit the variables at the top of fetch-and-prepare-kubeconfig.sh:"
-echo "CONTROL_PLANE_IP → your kubeadm master IP"
-echo "CONTROL_PLANE_USER → the SSH user"
-echo "================================================"
+log_info "CONTROL_PLANE_IP → your kubeadm master Private IP"
+log_info "CONTROL_PLANE_USER → the SSH user as a control plane user (default: ubuntu)"
+log_info "PEM_KEY_PATH → path to your PEM key file to access the control plane"
+log_info "Create pem file of a controll plane server on Jenkins server if not already done."
+echo "========================================================="
+echo "Next Step (on Jenkins Server):"
+echo "Run your jen_kube.sh script to fetch and prepare kubeconfig."
+echo "========================================================="
 
 ################################################################################
 # End of Script

@@ -11,6 +11,8 @@ pipeline {
         NODE_PORT = '30088'
         DB_PASSWORD = '1234'
         DB_NAME_MYSQL = 'myapplication'
+        # ✅ Kubeconfig path directly on Jenkins server
+        KUBECONFIG = '/home/jenkins/kubeconfig_for_jenkins/kubeconfig.yaml'
     }
 
     parameters {
@@ -20,12 +22,13 @@ pipeline {
 
     stages {
 
-        stage('Setup kubeconfig') {
+        stage('Verify Kubernetes Access') {
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh 'export KUBECONFIG=$KUBECONFIG_FILE'
-                    sh 'kubectl config view'
-                }
+                sh '''
+                    echo "Verifying access to Kubernetes cluster..."
+                    kubectl config view
+                    kubectl get nodes
+                '''
             }
         }
 
@@ -34,17 +37,14 @@ pipeline {
                 expression { params.ACTION == 'deploy' }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        if ! kubectl get namespace $K8S_NAMESPACE >/dev/null 2>&1; then
-                            kubectl apply -f k8s/namespace.yml
-                            echo "Namespace created."
-                        else
-                            echo "Namespace already exists, skipping..."
-                        fi
-                    """
-                }
+                sh '''
+                    if ! kubectl get namespace $K8S_NAMESPACE >/dev/null 2>&1; then
+                        kubectl apply -f k8s/namespace.yml
+                        echo "Namespace created."
+                    else
+                        echo "Namespace already exists, skipping..."
+                    fi
+                '''
             }
         }
 
@@ -53,12 +53,7 @@ pipeline {
                 expression { params.ACTION == 'deploy' }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        kubectl apply -f k8s/db_deploy_svc.yml -n $K8S_NAMESPACE
-                    """
-                }
+                sh 'kubectl apply -f k8s/db_deploy_svc.yml -n $K8S_NAMESPACE'
             }
         }
 
@@ -70,13 +65,10 @@ pipeline {
                 }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        echo "Waiting for MySQL pod to be ready..."
-                        kubectl wait --for=condition=ready pod -l app=$DB_NAME -n $K8S_NAMESPACE --timeout=180s
-                    """
-                }
+                sh '''
+                    echo "Waiting for MySQL pod to be ready..."
+                    kubectl wait --for=condition=ready pod -l app=$DB_NAME -n $K8S_NAMESPACE --timeout=180s
+                '''
             }
         }
 
@@ -88,12 +80,7 @@ pipeline {
                 }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        kubectl apply -f k8s/app_deploy_svc.yml -n $K8S_NAMESPACE
-                    """
-                }
+                sh 'kubectl apply -f k8s/app_deploy_svc.yml -n $K8S_NAMESPACE'
             }
         }
 
@@ -102,12 +89,7 @@ pipeline {
                 expression { params.ACTION == 'deploy' }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        kubectl get all -n $K8S_NAMESPACE
-                    """
-                }
+                sh 'kubectl get all -n $K8S_NAMESPACE'
             }
         }
 
@@ -119,12 +101,7 @@ pipeline {
                 }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        kubectl delete -f k8s/app_deploy_svc.yml -n $K8S_NAMESPACE || true
-                    """
-                }
+                sh 'kubectl delete -f k8s/app_deploy_svc.yml -n $K8S_NAMESPACE || true'
             }
         }
 
@@ -133,12 +110,7 @@ pipeline {
                 expression { params.ACTION == 'remove' }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        kubectl delete -f k8s/db_deploy_svc.yml -n $K8S_NAMESPACE || true
-                    """
-                }
+                sh 'kubectl delete -f k8s/db_deploy_svc.yml -n $K8S_NAMESPACE || true'
             }
         }
 
@@ -147,12 +119,7 @@ pipeline {
                 expression { params.ACTION == 'remove' }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        kubectl delete -f k8s/namespace.yml || true
-                    """
-                }
+                sh 'kubectl delete -f k8s/namespace.yml || true'
             }
         }
 
@@ -161,19 +128,14 @@ pipeline {
                 expression { params.ACTION == 'remove' }
             }
             steps {
-                withCredentials([file(credentialsId: 'kubeconfig-credentials-id', variable: 'KUBECONFIG_FILE')]) {
-                    sh """
-                        export KUBECONFIG=$KUBECONFIG_FILE
-                        kubectl get all -n $K8S_NAMESPACE || echo "Namespace deleted."
-                    """
-                }
+                sh 'kubectl get all -n $K8S_NAMESPACE || echo "Namespace deleted."'
             }
         }
     }
 
     post {
         always {
-            echo "Pipeline execution completed."
+            echo "✅ Pipeline execution completed."
         }
     }
 }
