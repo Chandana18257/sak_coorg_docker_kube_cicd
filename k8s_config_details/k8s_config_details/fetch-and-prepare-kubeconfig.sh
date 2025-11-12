@@ -47,7 +47,6 @@ fi
 # ---------------------------- Variables ---------------------------------------
 LOCAL_DEST_DIR="/home/jenkins/kubeconfig_for_jenkins"
 LOCAL_KUBECONFIG="$LOCAL_DEST_DIR/kubeconfig.yaml"
-JENKINS_CREDENTIAL_ID="kubeconfig-credentials-id"
 
 # ---------------------------- Check / Install kubectl -------------------------
 if command -v kubectl &>/dev/null; then
@@ -108,14 +107,16 @@ else
     exit 1
 fi
 
-# ---------------------------- Secure File -------------------------------------
-log_info "Setting secure permissions for kubeconfig..."
-chmod 600 "$LOCAL_KUBECONFIG"
+# ---------------------------- Secure Permissions ------------------------------
+log_info "Setting secure permissions and ownership for kubeconfig..."
+sudo chown jenkins:jenkins "$LOCAL_KUBECONFIG"
+sudo chmod 600 "$LOCAL_KUBECONFIG"
+log_success "Ownership set to jenkins:jenkins and permissions to 600."
 
 # ---------------------------- Test Cluster Connectivity -----------------------
 export KUBECONFIG="$LOCAL_KUBECONFIG"
 log_info "Testing kubectl connectivity..."
-if kubectl get nodes &>/dev/null; then
+if sudo -u jenkins kubectl get nodes &>/dev/null; then
     log_success "Kubectl successfully connected to the cluster!"
 else
     log_error "Kubectl cannot connect to the cluster. Check IP, security groups, or cluster status!"
@@ -125,10 +126,12 @@ fi
 # ---------------------------- Jenkins Instructions ----------------------------
 log_success "Kubeconfig ready for Jenkins usage."
 echo "================================================================"
-echo "   File: $LOCAL_KUBECONFIG"
-log_success "After this Build now using Jenkins pipeline can access the Kubernetes cluster."
-echo "no need of Jenkins credential creation step as file is already placed on Jenkins server."
+echo "File Path: $LOCAL_KUBECONFIG"
+echo "Jenkins user already has ownership and permissions to use it."
+echo "No need to add as Jenkins credential file — the file is local."
+echo "You can now run your Jenkins pipeline normally."
 echo "================================================================"
+
 ################################################################################
 # End of Script
 ################################################################################
